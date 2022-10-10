@@ -20,37 +20,139 @@ var (
 	errSetCursor = errors.New("SetCursorPos failed")
 )
 
-// LeftClickAt moves the mouse to screen coordinates x,y and clicks the left
-// mouse button.
-func LeftClickAt(x, y int) error {
+// ClickLeftMouseAt moves the mouse to screen coordinates x,y and clicks the
+// left mouse button, i.e. presses and releases it.
+func ClickLeftMouseAt(x, y int) error {
 	return clickAt(x, y, w32.MOUSEEVENTF_LEFTDOWN, w32.MOUSEEVENTF_LEFTUP)
 }
 
-// RightClickAt moves the mouse to screen coordinates x,y and clicks the right
-// mouse button.
-func RightClickAt(x, y int) error {
-	return clickAt(x, y, w32.MOUSEEVENTF_RIGHTDOWN, w32.MOUSEEVENTF_RIGHTUP)
-}
-
-// MiddleClickAt moves the mouse to screen coordinates x,y and clicks the middle
-// mouse button.
-func MiddleClickAt(x, y int) error {
-	return clickAt(x, y, w32.MOUSEEVENTF_MIDDLEDOWN, w32.MOUSEEVENTF_MIDDLEUP)
-}
-
-// LeftClick clicks the left mouse button, i.e. presses and releases it.
-func LeftClick() error {
+// ClickLeftMouse clicks the left mouse button, i.e. presses and releases it.
+func ClickLeftMouse() error {
 	return click(w32.MOUSEEVENTF_LEFTDOWN, w32.MOUSEEVENTF_LEFTUP)
 }
 
-// RightClick clicks the right mouse button, i.e. presses and releases it.
-func RightClick() error {
+// PressLeftMouseAt moves the mouse to screen coordinates x,y and presses the
+// left mouse button down. Call ReleaseLeftMouse or ReleaseLeftMouseAt to
+// release the button.
+func PressLeftMouseAt(x, y int) error {
+	return mouseInputAt(x, y, w32.MOUSEEVENTF_LEFTDOWN)
+}
+
+// PressLeftMouse presses the left mouse button down. Call ReleaseLeftMouse or
+// ReleaseLeftMouseAt to release the button.
+func PressLeftMouse() error {
+	return mouseInput(w32.MOUSEEVENTF_LEFTDOWN)
+}
+
+// ReleaseLeftMouseAt moves the mouse to screen coordinates x,y and releases the
+// left mouse button. You probably want to press it before, using
+// PressLeftMouseAt or PressLeftMouse.
+func ReleaseLeftMouseAt(x, y int) error {
+	return mouseInputAt(x, y, w32.MOUSEEVENTF_LEFTUP)
+}
+
+// ReleaseLeftMouse releases the left mouse button. You probably want to press
+// it before, using PressLeftMouseAt or PressLeftMouse.
+func ReleaseLeftMouse() error {
+	return mouseInput(w32.MOUSEEVENTF_LEFTUP)
+}
+
+// ClickRightMouseAt moves the mouse to screen coordinates x,y and clicks the
+// right mouse button, i.e. presses and releases it.
+func ClickRightMouseAt(x, y int) error {
+	return clickAt(x, y, w32.MOUSEEVENTF_RIGHTDOWN, w32.MOUSEEVENTF_RIGHTUP)
+}
+
+// ClickRightMouse clicks the right mouse button, i.e. presses and releases it.
+func ClickRightMouse() error {
 	return click(w32.MOUSEEVENTF_RIGHTDOWN, w32.MOUSEEVENTF_RIGHTUP)
 }
 
-// MiddleClick clicks the middle mouse button, i.e. presses and releases it.
-func MiddleClick() error {
+// PressRightMouseAt moves the mouse to screen coordinates x,y and presses the
+// right mouse button down. Call ReleaseRightMouse or ReleaseRightMouseAt to
+// release the button.
+func PressRightMouseAt(x, y int) error {
+	return mouseInputAt(x, y, w32.MOUSEEVENTF_RIGHTDOWN)
+}
+
+// PressRightMouse presses the right mouse button down. Call ReleaseRightMouse or
+// ReleaseRightMouseAt to release the button.
+func PressRightMouse() error {
+	return mouseInput(w32.MOUSEEVENTF_RIGHTDOWN)
+}
+
+// ReleaseRightMouseAt moves the mouse to screen coordinates x,y and releases the
+// right mouse button. You probably want to press it before, using
+// PressRightMouseAt or PressRightMouse.
+func ReleaseRightMouseAt(x, y int) error {
+	return mouseInputAt(x, y, w32.MOUSEEVENTF_RIGHTUP)
+}
+
+// ReleaseRightMouse releases the right mouse button. You probably want to press
+// it before, using PressRightMouseAt or PressRightMouse.
+func ReleaseRightMouse() error {
+	return mouseInput(w32.MOUSEEVENTF_RIGHTUP)
+}
+
+// ClickMiddleMouseAt moves the mouse to screen coordinates x,y and clicks the
+// middle mouse button, i.e. presses and releases it.
+func ClickMiddleMouseAt(x, y int) error {
+	return clickAt(x, y, w32.MOUSEEVENTF_MIDDLEDOWN, w32.MOUSEEVENTF_MIDDLEUP)
+}
+
+// ClickMiddleMouse clicks the middle mouse button, i.e. presses and releases it.
+func ClickMiddleMouse() error {
 	return click(w32.MOUSEEVENTF_MIDDLEDOWN, w32.MOUSEEVENTF_MIDDLEUP)
+}
+
+// PressMiddleMouseAt moves the mouse to screen coordinates x,y and presses the
+// middle mouse button down. Call ReleaseMiddleMouse or ReleaseMiddleMouseAt to
+// release the button.
+func PressMiddleMouseAt(x, y int) error {
+	return mouseInputAt(x, y, w32.MOUSEEVENTF_MIDDLEDOWN)
+}
+
+// PressMiddleMouse presses the middle mouse button down. Call ReleaseMiddleMouse or
+// ReleaseMiddleMouseAt to release the button.
+func PressMiddleMouse() error {
+	return mouseInput(w32.MOUSEEVENTF_MIDDLEDOWN)
+}
+
+// ReleaseMiddleMouseAt moves the mouse to screen coordinates x,y and releases the
+// middle mouse button. You probably want to press it before, using
+// PressMiddleMouseAt or PressMiddleMouse.
+func ReleaseMiddleMouseAt(x, y int) error {
+	return mouseInputAt(x, y, w32.MOUSEEVENTF_MIDDLEUP)
+}
+
+// ReleaseMiddleMouse releases the middle mouse button. You probably want to press
+// it before, using PressMiddleMouseAt or PressMiddleMouse.
+func ReleaseMiddleMouse() error {
+	return mouseInput(w32.MOUSEEVENTF_MIDDLEUP)
+}
+
+// MoveMouseTo move the mouse cursor to the given screen coordinates.
+func MoveMouseTo(x, y int) error {
+	if !w32.SetCursorPos(x, y) {
+		return errSetCursor
+	}
+	return nil
+}
+
+// MoveMouseBy moves the mouse cursor by the given amount of pixels in x and y.
+// Positive x moves the cursor right.
+// Negative x moves the cursor left.
+// Positive y moves the cursor down.
+// Negative y moves the cursor up.
+func MoveMouseBy(dx, dy int) error {
+	x, y, ok := w32.GetCursorPos()
+	if !ok {
+		return errors.New("GetCursorPos failed")
+	}
+	if !w32.SetCursorPos(x+dx, y+dy) {
+		return errSetCursor
+	}
+	return nil
 }
 
 func clickAt(x, y int, down, up uint32) error {
@@ -71,105 +173,16 @@ func click(down, up uint32) error {
 	return nil
 }
 
-// LeftDown presses the left mouse button down.
-func LeftDown(x, y int) error {
-	return buttonDown(x, y, w32.MOUSEEVENTF_LEFTDOWN)
-}
-
-// RightDown presses the right mouse button down.
-func RightDown(x, y int) error {
-	return buttonDown(x, y, w32.MOUSEEVENTF_RIGHTDOWN)
-}
-
-// MiddleDown presses the middle mouse button down.
-func MiddleDown(x, y int) error {
-	return buttonDown(x, y, w32.MOUSEEVENTF_MIDDLEDOWN)
-}
-
-// LeftUp releases the left mouse button.
-func LeftUp() error {
-	return buttonUp(w32.MOUSEEVENTF_LEFTUP)
-}
-
-// RightUp releases the right mouse button.
-func RightUp() error {
-	return buttonUp(w32.MOUSEEVENTF_RIGHTUP)
-}
-
-// MiddleUp releases the middle mouse button.
-func MiddleUp() error {
-	return buttonUp(w32.MOUSEEVENTF_MIDDLEUP)
-}
-
-func buttonDown(x, y int, down uint32) error {
+func mouseInputAt(x, y int, flags uint32) error {
 	if !w32.SetCursorPos(x, y) {
 		return errSetCursor
 	}
+	return mouseInput(flags)
+}
+
+func mouseInput(flags uint32) error {
 	n := w32.SendInput(
-		w32.MouseInput(w32.MOUSEINPUT{Flags: down}),
-	)
-	if n == 0 {
-		return errBlocked
-	}
-	return nil
-}
-
-func buttonUp(up uint32) error {
-	n := w32.SendInput(
-		w32.MouseInput(w32.MOUSEINPUT{Flags: up}),
-	)
-	if n == 0 {
-		return errBlocked
-	}
-	return nil
-}
-
-// MoveMouseTo move the mouse cursor to the given screen coordinates.
-func MoveMouseTo(x, y int) error {
-	if !w32.SetCursorPos(x, y) {
-		return errSetCursor
-	}
-	return nil
-}
-
-// MoveMouseBy moves the mouse cursor by the given amount of pixels in x and y.
-// Note that positive dy means the cursor is move down on the screen.
-func MoveMouseBy(dx, dy int) error {
-	x, y, ok := w32.GetCursorPos()
-	if !ok {
-		return errors.New("GetCursorPos failed")
-	}
-	if !w32.SetCursorPos(x+dx, y+dy) {
-		return errSetCursor
-	}
-	return nil
-}
-
-// LeftDoubleClickAt moves the mouse to screen coordinates x,y and clicks the
-// left mouse button twice.
-func LeftDoubleClickAt(x, y int) error {
-	if !w32.SetCursorPos(x, y) {
-		return errSetCursor
-	}
-	n := w32.SendInput(
-		w32.MouseInput(w32.MOUSEINPUT{Flags: w32.MOUSEEVENTF_LEFTDOWN}),
-		w32.MouseInput(w32.MOUSEINPUT{Flags: w32.MOUSEEVENTF_LEFTUP}),
-		w32.MouseInput(w32.MOUSEINPUT{Flags: w32.MOUSEEVENTF_LEFTDOWN}),
-		w32.MouseInput(w32.MOUSEINPUT{Flags: w32.MOUSEEVENTF_LEFTUP}),
-	)
-	if n == 0 {
-		return errBlocked
-	}
-	return nil
-}
-
-// LeftDoubleClick clicks the left mouse button twice.
-func LeftDoubleClick() error {
-	n := w32.SendInput(
-		w32.MouseInput(w32.MOUSEINPUT{Flags: w32.MOUSEEVENTF_LEFTDOWN}),
-		w32.MouseInput(w32.MOUSEINPUT{Flags: w32.MOUSEEVENTF_LEFTUP}),
-		w32.MouseInput(w32.MOUSEINPUT{Flags: w32.MOUSEEVENTF_LEFTDOWN}),
-		w32.MouseInput(w32.MOUSEINPUT{Flags: w32.MOUSEEVENTF_LEFTUP}),
+		w32.MouseInput(w32.MOUSEINPUT{Flags: flags}),
 	)
 	if n == 0 {
 		return errBlocked
@@ -255,9 +268,8 @@ func TypeWithDelay(s string, delay time.Duration) error {
 	return nil
 }
 
-// PressKey presses the given key on the keyboard. The value must be a virtual
-// keycode like 'A', '1' or VK_RETURN (you can use the constants in
-// github.com/gonutz/w32/v2 VK_...).
+// PressKey presses the given key on the keyboard. You can pass key codes
+// defined in this package, named Key...
 func PressKey(key uint16) error {
 	n := w32.SendInput(w32.KeyboardInput(w32.KEYBDINPUT{Vk: key}))
 	if n == 0 {
@@ -266,9 +278,8 @@ func PressKey(key uint16) error {
 	return nil
 }
 
-// ReleaseKey releases the given key on the keyboard. The value must be a
-// virtual keycode like 'A', '1' or VK_RETURN (you can use the constants in
-// github.com/gonutz/w32 VK_...).
+// ReleaseKey releases the given key on the keyboard. You can pass key codes
+// defined in this package, named Key...
 func ReleaseKey(key uint16) error {
 	n := w32.SendInput(w32.KeyboardInput(w32.KEYBDINPUT{
 		Vk:    key,
@@ -309,38 +320,51 @@ func ForegroundWindow() (Window, error) {
 	return windowHandleToWindow(w), nil
 }
 
-// SetForegroundWindow tries to bring the given window to the front.
-func SetForegroundWindow(w Window) error {
+// BringToForeground tries to bring the given window to the front.
+func (w *Window) BringToForeground() error {
 	if !w32.SetForegroundWindow(w.Handle) {
 		return errors.New("SetForegroundWindow failed")
 	}
+	w.Update()
 	return nil
 }
 
-// RestoreWindow unminimizes a minimized window and unmaximizes a maximized
-// window.
-func RestoreWindow(w Window) {
+// Restore unminimizes a minimized window and unmaximizes a maximized window.
+func (w *Window) Restore() {
 	w32.ShowWindow(w.Handle, w32.SW_RESTORE)
+	w.Update()
 }
 
-// MaximizeWindow maximizes the given window.
-func MaximizeWindow(w Window) {
+// Maximize maximizes the given window.
+func (w *Window) Maximize() {
 	w32.ShowWindow(w.Handle, w32.SW_MAXIMIZE)
+	w.Update()
 }
 
-// MinimizeWindow minimizes the given window.
-func MinimizeWindow(w Window) {
+// Minimize minimizes the given window.
+func (w *Window) Minimize() {
 	w32.ShowWindow(w.Handle, w32.SW_MINIMIZE)
+	w.Update()
 }
 
-// HideWindow hides the given window.
-func HideWindow(w Window) {
+// Hide hides the window. Call ShowWindow to show it again.
+func (w *Window) Hide() {
 	w32.ShowWindow(w.Handle, w32.SW_HIDE)
+	w.Update()
 }
 
-// ShowWindow hides the given window.
-func ShowWindow(w Window) {
+// Show shows the given window. Call this to show a window that was hidden with
+// Hide.
+func (w *Window) Show() {
 	w32.ShowWindow(w.Handle, w32.SW_SHOW)
+	w.Update()
+}
+
+// Update updates the state of the window, all fields are queried from the OS
+// again. If the state or size of a window changes, Update will poll these
+// changes.
+func (w *Window) Update() {
+	*w = windowHandleToWindow(w.Handle)
 }
 
 // Window is a window currently open on you system.
@@ -451,12 +475,16 @@ func SetClipboardText(text string) error {
 	return nil
 }
 
-//  Rectangle is used to desribe monitor and window boundaries.
+// Rectangle is used to desribe monitor and window boundaries.
 type Rectangle struct {
-	X      int // X is the left-most pixel.
-	Y      int // Y is the top-most pixel.
-	Width  int // Width is the width in pixels.
-	Height int // Height is the height in pixels.
+	// X is the left-most pixel.
+	X int
+	// Y is the top-most pixel.
+	Y int
+	// Width is the width in pixels.
+	Width int
+	// Height is the height in pixels.
+	Height int
 }
 
 // Monitor is a single monitor connected to your computer.
@@ -470,6 +498,8 @@ type Monitor struct {
 	Rectangle
 	// WorkArea is the monitor area that is not covered by the task bar.
 	WorkArea Rectangle
+	// Primary is true if this is the current default/primary monitor.
+	Primary bool
 }
 
 // Windows returns a list of all currently active windows.
@@ -484,7 +514,18 @@ func Windows() ([]Window, error) {
 	return windows, nil
 }
 
-// Monitors returns all monitors currently connected to your computer.
+// PrimaryMonitor returns the current default/primary monitor.
+func PrimaryMonitor() (Monitor, error) {
+	m := w32.MonitorFromPoint(0, 0, w32.MONITOR_DEFAULTTOPRIMARY)
+	if m == 0 {
+		return Monitor{}, errors.New(
+			"MonitorFromPoint with MONITOR_DEFAULTTOPRIMARY failed",
+		)
+	}
+	return monitorHandleToMonitor(m)
+}
+
+// Monitors returns all monitors currently connected to the computer.
 func Monitors() ([]Monitor, error) {
 	var monitorHandles []w32.HMONITOR
 	if !w32.EnumDisplayMonitors(
@@ -501,21 +542,36 @@ func Monitors() ([]Monitor, error) {
 
 	monitors := make([]Monitor, len(monitorHandles))
 	for i := range monitors {
-		var info w32.MONITORINFO
-		if !w32.GetMonitorInfo(monitorHandles[i], &info) {
-			return nil, errors.New("GetMonitorInfo failed")
+		m, err := monitorHandleToMonitor(monitorHandles[i])
+		if err != nil {
+			return nil, err
 		}
-		monitors[i].X = int(info.RcMonitor.Left)
-		monitors[i].Y = int(info.RcMonitor.Top)
-		monitors[i].Width = int(info.RcMonitor.Width())
-		monitors[i].Height = int(info.RcMonitor.Height())
-		monitors[i].WorkArea.X = int(info.RcWork.Left)
-		monitors[i].WorkArea.Y = int(info.RcWork.Top)
-		monitors[i].WorkArea.Width = int(info.RcWork.Width())
-		monitors[i].WorkArea.Height = int(info.RcWork.Height())
+		monitors[i] = m
 	}
 
 	return monitors, nil
+}
+
+func monitorHandleToMonitor(monitor w32.HMONITOR) (Monitor, error) {
+	var info w32.MONITORINFO
+	if !w32.GetMonitorInfo(monitor, &info) {
+		return Monitor{}, errors.New("GetMonitorInfo failed")
+	}
+	return Monitor{
+		Rectangle: Rectangle{
+			X:      int(info.RcMonitor.Left),
+			Y:      int(info.RcMonitor.Top),
+			Width:  int(info.RcMonitor.Width()),
+			Height: int(info.RcMonitor.Height()),
+		},
+		WorkArea: Rectangle{
+			X:      int(info.RcWork.Left),
+			Y:      int(info.RcWork.Top),
+			Width:  int(info.RcWork.Width()),
+			Height: int(info.RcWork.Height()),
+		},
+		Primary: info.DwFlags&w32.MONITORINFOF_PRIMARY != 0,
+	}, nil
 }
 
 // CaptureWindow returns a screen shot of the outer boundaries of the given
@@ -665,6 +721,7 @@ func CaptureMonitors(monitors []Monitor) (image.Image, error) {
 	return CaptureScreenRect(r)
 }
 
+// Key... constants are keys you can pass to TypeKey, PressKey and ReleaseKey.
 const (
 	KeyA                  = 'A'
 	KeyB                  = 'B'
