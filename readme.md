@@ -13,6 +13,7 @@ Mouse functions:
     err := auto.ReleaseLeftMouse()
     err := auto.MoveMouseTo(x, y)
     err := auto.MoveMouseBy(relativeX, relativeY)
+	x, y, err := auto.MousePosition()
 
 Keyboard functions:
 

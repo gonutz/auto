@@ -155,6 +155,15 @@ func MoveMouseBy(dx, dy int) error {
 	return nil
 }
 
+// MousePosition returns the mouse position in screen coordinates.
+func MousePosition() (x, y int, err error) {
+	x, y, ok := w32.GetCursorPos()
+	if !ok {
+		return 0, 0, errors.New("GetCursorPos failed")
+	}
+	return x, y, nil
+}
+
 func clickAt(x, y int, down, up uint32) error {
 	if !w32.SetCursorPos(x, y) {
 		return errSetCursor
