@@ -329,6 +329,13 @@ func ForegroundWindow() (Window, error) {
 	return windowHandleToWindow(w), nil
 }
 
+// Update updates the state of the window, all fields are queried from the OS
+// again. If the state or size of a window changes, Update will poll these
+// changes.
+func (w *Window) Update() {
+	*w = windowHandleToWindow(w.Handle)
+}
+
 // BringToForeground tries to bring the given window to the front.
 func (w *Window) BringToForeground() error {
 	if !w32.SetForegroundWindow(w.Handle) {
@@ -369,11 +376,110 @@ func (w *Window) Show() {
 	w.Update()
 }
 
-// Update updates the state of the window, all fields are queried from the OS
-// again. If the state or size of a window changes, Update will poll these
-// changes.
-func (w *Window) Update() {
-	*w = windowHandleToWindow(w.Handle)
+// InnerPosition reutrns the boundaries of the window content, i.e. without
+// window borders, in screen coordinates.
+func (w *Window) InnerPosition() (x, y, width, height int, err error) {
+	x, y = w32.ClientToScreen(w.Handle, 0, 0)
+	r := w32.GetClientRect(w.Handle)
+	width = int(r.Width())
+	height = int(r.Height())
+	err = nil
+	return
+}
+
+// SetInnerPosition sets the boundaries of the window border.
+//
+// Note that if the window is currently maximized, you might want to Restore()
+// it before calling SetInnerPosition to un-maximize it.
+//
+// Note that if the window is currently maximized, you might want to Restore()
+// it before calling SetInnerPosition to bring it back up. This might now
+// restore to a maximized state, thus you probably want to call Restore() it
+// twice in that case.
+func (w *Window) SetInnerPosition(x, y, width, height int) error {
+	r := w32.RECT{
+		Left:   int32(x),
+		Top:    int32(y),
+		Right:  int32(x + width),
+		Bottom: int32(y + height),
+	}
+	style := uint(w32.GetWindowLong(w.Handle, w32.GWL_STYLE))
+	extendedStyle := uint(w32.GetWindowLong(w.Handle, w32.GWL_EXSTYLE))
+	hasMenu := w32.GetMenu(w.Handle) != 0
+	if !w32.AdjustWindowRectEx(&r, style, hasMenu, extendedStyle) {
+		return errors.New("AdjustWindowRectEx failed")
+	}
+
+	if !w32.SetWindowPos(
+		w.Handle,
+		0,
+		int(r.Left),
+		int(r.Top),
+		int(r.Width()),
+		int(r.Height()),
+		w32.SWP_NOACTIVATE|w32.SWP_NOOWNERZORDER|w32.SWP_NOZORDER,
+	) {
+		return errors.New("SetWindowPos failed")
+	}
+
+	w.Update()
+
+	return nil
+}
+
+// OuterPosition returns the bounaries of the window border, in screen
+// coordinates.
+func (w *Window) OuterPosition() (x, y, width, height int, err error) {
+	ok, r := w32.DwmGetWindowAttributeEXTENDED_FRAME_BOUNDS(w.Handle)
+	if !ok {
+		// If the new function fails, assume we are on an old system and that
+		// GetWindowRect actually works here.
+		r = *w32.GetWindowRect(w.Handle)
+	}
+	return int(r.Left), int(r.Top), int(r.Width()), int(r.Height()), nil
+}
+
+// SetOuterPosition sets the boundaries of the window border.
+//
+// Note that if the window is currently maximized, you might want to Restore()
+// it before calling SetOuterPosition to un-maximize it.
+//
+// Note that if the window is currently maximized, you might want to Restore()
+// it before calling SetOuterPosition to bring it back up. This might now
+// restore to a maximized state, thus you probably want to call Restore() it
+// twice in that case.
+func (w *Window) SetOuterPosition(x, y, width, height int) error {
+	// DwmSetWindowAttribute returns error "access denied" so instead we query
+	// the window position (which is not denied) from both the old and new
+	// functions and compute the differences ourselves.
+	oldBounds := *w32.GetWindowRect(w.Handle)
+	ok, newBounds := w32.DwmGetWindowAttributeEXTENDED_FRAME_BOUNDS(w.Handle)
+	if !ok {
+		// If the new function fails, assume we are on an old system and that
+		// SetWindowPos actually works here.
+		newBounds = oldBounds
+	}
+
+	dx := int(oldBounds.Left - newBounds.Left)
+	dy := int(oldBounds.Top - newBounds.Top)
+	dWidth := int(oldBounds.Width() - newBounds.Width())
+	dHeight := int(oldBounds.Height() - newBounds.Height())
+
+	if !w32.SetWindowPos(
+		w.Handle,
+		0,
+		x+dx,
+		y+dy,
+		width+dWidth,
+		height+dHeight,
+		w32.SWP_NOACTIVATE|w32.SWP_NOOWNERZORDER|w32.SWP_NOZORDER,
+	) {
+		return errors.New("SetWindowPos failed")
+	}
+
+	w.Update()
+
+	return nil
 }
 
 // Window is a window currently open on you system.
