@@ -164,6 +164,47 @@ func MousePosition() (x, y int, err error) {
 	return x, y, nil
 }
 
+// MoveMouseWheelBy rotates the mouse wheel, vertically and/or horizontally.
+// dy is the vertical rotation, dy = 1 means one tick forward, away from the
+// user.
+// dy = -1 means one tick backward, towards the user.
+// dx is the horizontal rotation. dx = 1 means one tick to the right, dx = -1
+// means one tick to the left.
+func MoveMouseWheelBy(dx, dy float64) error {
+	round := func(x float64) int32 {
+		if x < 0 {
+			return int32(x - 0.5)
+		}
+		return int32(x + 0.5)
+	}
+
+	if dy != 0 {
+		n := w32.SendInput(
+			w32.MouseInput(w32.MOUSEINPUT{
+				MouseData: uint32(round(dy * 120)),
+				Flags:     w32.MOUSEEVENTF_WHEEL, // vertical
+			}),
+		)
+		if n == 0 {
+			return errBlocked
+		}
+	}
+
+	if dx != 0 {
+		n := w32.SendInput(
+			w32.MouseInput(w32.MOUSEINPUT{
+				MouseData: uint32(round(dx * 120)),
+				Flags:     w32.MOUSEEVENTF_HWHEEL, // horizontal
+			}),
+		)
+		if n == 0 {
+			return errBlocked
+		}
+	}
+
+	return nil
+}
+
 func clickAt(x, y int, down, up uint32) error {
 	if !w32.SetCursorPos(x, y) {
 		return errSetCursor

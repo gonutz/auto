@@ -14,6 +14,7 @@ Mouse functions:
     err := auto.MoveMouseTo(x, y)
     err := auto.MoveMouseBy(relativeX, relativeY)
 	x, y, err := auto.MousePosition()
+	err := auto.MoveMouseWheelBy(dx, dy)
 
 Keyboard functions:
 
