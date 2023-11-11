@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -358,6 +359,259 @@ func TypeKey(key uint16) error {
 		return errBlocked
 	}
 	return nil
+}
+
+// SetOnKeyboardEvent sets a callback that is called every time a keyboard
+// event happens, i.e. a key is pressed or released. Set it to nil to stop
+// listening to keyboard events.
+func SetOnKeyboardEvent(f func(*KeyboardEvent)) {
+	loop.setKeyboardEvent(f)
+}
+
+// SetOnMouseEvent sets a callback that is called every time a mouse event
+// happens, i.e. a button is pressed or released, the mouse moves or the mouse
+// wheel is rotated. Set it to nil to stop listening to mouse events.
+func SetOnMouseEvent(f func(*MouseEvent)) {
+	loop.setMouseEvent(f)
+}
+
+// KeyboardEvent is given to the callback passed to SetOnKeyboardEvent. Every
+// time a keyboard event is triggered by either the user or programmatically
+// (e.g. by this library), a KeyboardEvent is sent. Key is the virtual key
+// code, see the Key... constants defined in this library. Down indicates
+// whether the key is presed down (true) or released (false). Injected is true
+// if the key event was generated programmatically.
+type KeyboardEvent struct {
+	Key       uint16
+	Down      bool
+	Injected  bool
+	cancelled bool
+}
+
+// Cancel stops the event from being handled further. That means the currently
+// focussed window will not receive the event.
+func (e *KeyboardEvent) Cancel() {
+	e.cancelled = true
+}
+
+// MouseEvent is given to the callback passed to SetOnMouseEvent. Every time a
+// mouse event is triggered by either the user or programmatically (e.g. by
+// this library), a MouseEvent is sent. Type is the concrete event type
+// (button, move or wheel event). X and Y are the screen coordinates in monitor
+// space. These can be negative, e.g. if you place your second monitor left of
+// the primary monitor (and tell Windows via its settings). Wheel is the amount
+// of ticks the mouse wheel has rotated. This is only set for events MouseWheel
+// and MouseWheelHorizontal, otherwise it is 0. Injected is true if the key
+// event was generated programmatically.
+type MouseEvent struct {
+	Type      MouseEventType
+	X         int
+	Y         int
+	Wheel     float64
+	Injected  bool
+	cancelled bool
+}
+
+// Cancel stops the event from being handled further. That means the currently
+// focussed window will not receive the event.
+func (e *MouseEvent) Cancel() {
+	e.cancelled = true
+}
+
+// MouseEventType is the concrete type of a MouseEvent.
+type MouseEventType int
+
+// These are the available MosueEventTypes. Mouse down and up events are sent
+// when a mouse button is pressed down and released respectively. MouseMove is
+// sent when the mouse moves. MouseWheel is sent when the regular vertical
+// mouse wheel on a desktop mouse is scrolled or when a touch pad is scrolled
+// up or down. MouseWheelHorizontal is sent when a horizontal wheel is
+// scrolled. These typically do not exist on regular desktop mouse devices.
+// This can be triggered with a touch pad scroll from left to right or vice
+// versa.
+const (
+	LeftMouseDown        MouseEventType = w32.WM_LBUTTONDOWN
+	LeftMouseUp                         = w32.WM_LBUTTONUP
+	RightMouseDown                      = w32.WM_RBUTTONDOWN
+	RightMouseUp                        = w32.WM_RBUTTONUP
+	MiddleMouseDown                     = w32.WM_MBUTTONDOWN
+	MiddleMouseUp                       = w32.WM_MBUTTONUP
+	MouseMove                           = w32.WM_MOUSEMOVE
+	MouseWheel                          = w32.WM_MOUSEWHEEL
+	MouseWheelHorizontal                = w32.WM_MOUSEHWHEEL
+)
+
+type messageLoop struct {
+	mu            sync.Mutex
+	running       bool
+	keyboardEvent func(*KeyboardEvent)
+	mouseEvent    func(*MouseEvent)
+	newEvents     chan bool
+}
+
+func newMessageLoop() *messageLoop {
+	return &messageLoop{
+		newEvents: make(chan bool),
+	}
+}
+
+var loop = newMessageLoop()
+
+func (m *messageLoop) setKeyboardEvent(f func(*KeyboardEvent)) {
+	m.startLoop()
+	m.keyboardEvent = f
+	m.newEvents <- true
+}
+
+func (m *messageLoop) setMouseEvent(f func(*MouseEvent)) {
+	m.startLoop()
+	m.mouseEvent = f
+	m.newEvents <- true
+}
+
+func (m *messageLoop) startLoop() {
+	m.mu.Lock()
+	if !m.running {
+		m.running = true
+		go m.loop()
+	}
+	m.mu.Unlock()
+}
+
+func (m *messageLoop) loop() {
+	defer func() {
+		m.mu.Lock()
+		m.running = false
+		m.mu.Unlock()
+	}()
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	var keyboardCallback func(*KeyboardEvent)
+	var mouseCallback func(*MouseEvent)
+
+	var keyboardHook, mouseHook w32.HHOOK
+
+	defer func() {
+		if keyboardHook != 0 {
+			w32.UnhookWindowsHookEx(keyboardHook)
+		}
+		if mouseHook != 0 {
+			w32.UnhookWindowsHookEx(mouseHook)
+		}
+	}()
+
+	hookKeyboard := func() {
+		wantHook := keyboardCallback != nil
+		haveHook := keyboardHook != 0
+
+		if wantHook == haveHook {
+			return
+		}
+
+		if wantHook {
+			keyboardHook = w32.SetWindowsHookEx(
+				w32.WH_KEYBOARD_LL,
+				func(code int, w w32.WPARAM, l w32.LPARAM) w32.LRESULT {
+					if code >= 0 {
+						kb := (*w32.KBDLLHOOKSTRUCT)(unsafe.Pointer(uintptr(l)))
+						e := KeyboardEvent{
+							Key:      uint16(kb.VkCode),
+							Down:     kb.Flags&0x80 == 0,
+							Injected: kb.Flags&0x10 != 0,
+						}
+						if keyboardCallback != nil {
+							keyboardCallback(&e)
+						}
+						if e.cancelled {
+							return 1
+						}
+					}
+					return w32.CallNextHookEx(0, code, w, l)
+				},
+				w32.GetModuleHandle(""),
+				0,
+			)
+		} else {
+			if keyboardHook != 0 {
+				w32.UnhookWindowsHookEx(keyboardHook)
+				keyboardHook = 0
+			}
+		}
+	}
+
+	hookMouse := func() {
+		wantHook := mouseCallback != nil
+		haveHook := mouseHook != 0
+
+		if wantHook == haveHook {
+			return
+		}
+
+		if wantHook {
+			mouseHook = w32.SetWindowsHookEx(
+				w32.WH_MOUSE_LL,
+				func(code int, w w32.WPARAM, l w32.LPARAM) w32.LRESULT {
+					if code >= 0 {
+						mouse := (*w32.MSLLHOOKSTRUCT)(unsafe.Pointer(uintptr(l)))
+						wheel := 1.0
+						if w == w32.WM_MOUSEWHEEL || w == w32.WM_MOUSEHWHEEL {
+							delta := int16((mouse.MouseData & 0xFFFF0000) >> 16)
+							wheel = float64(delta) / 120.0
+						}
+						x, y, err := MousePosition()
+						if err != nil {
+							x = int(mouse.Pt.X)
+							y = int(mouse.Pt.Y)
+						}
+						e := MouseEvent{
+							Type:     MouseEventType(w),
+							X:        x,
+							Y:        y,
+							Wheel:    wheel,
+							Injected: mouse.Flags&1 != 0,
+						}
+						if mouseCallback != nil {
+							mouseCallback(&e)
+						}
+						if e.cancelled {
+							return 1
+						}
+					}
+					return w32.CallNextHookEx(0, code, w, l)
+				},
+				w32.GetModuleHandle(""),
+				0,
+			)
+		} else {
+			if mouseHook != 0 {
+				w32.UnhookWindowsHookEx(mouseHook)
+				mouseHook = 0
+			}
+		}
+	}
+
+	for {
+		select {
+		case <-m.newEvents:
+			if m.keyboardEvent == nil && m.mouseEvent == nil {
+				return
+			}
+			keyboardCallback = m.keyboardEvent
+			mouseCallback = m.mouseEvent
+			hookMouse()
+			hookKeyboard()
+		default:
+			var msg w32.MSG
+			if w32.PeekMessage(&msg, 0, 0, 0, w32.PM_REMOVE) {
+				w32.TranslateMessage(&msg)
+				w32.DispatchMessage(&msg)
+			} else {
+				time.Sleep(time.Nanosecond)
+			}
+		}
+	}
 }
 
 // ForegroundWindow returns the currently active window. If no window is active,

@@ -54,6 +54,11 @@ Window functions:
     window.Show()
     window.Update()
 
+Global Events:
+
+    auto.SetOnKeyboardEvent(func(*auto.KeyboardEvent))
+    auto.SetOnMouseEvent(func(*auto.MouseEvent))
+
 Other OS functions:
 
     text, err := auto.ClipboardText()
