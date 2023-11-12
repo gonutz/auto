@@ -58,8 +58,10 @@ Global Events:
 
     auto.SetOnKeyboardEvent(func(*auto.KeyboardEvent))
     auto.SetOnMouseEvent(func(*auto.MouseEvent))
+    auto.SetOnClipboardChange(func())
 
 Other OS functions:
 
     text, err := auto.ClipboardText()
     err := auto.SetClipboardText("Hello")
+	ShowMessage(caption, message string)

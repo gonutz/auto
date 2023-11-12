@@ -1203,6 +1203,15 @@ func CaptureMonitors(monitors []Monitor) (image.Image, error) {
 	return CaptureScreenRect(r)
 }
 
+func ShowMessage(caption, message string) {
+	// Make sure the message uses Windows line breaks.
+	message = strings.ReplaceAll(message, "\r", "")
+	message = strings.ReplaceAll(message, "\n", "\r\n")
+	w32.MessageBox(
+		0, message, caption, w32.MB_OK|w32.MB_TOPMOST|w32.MB_ICONINFORMATION,
+	)
+}
+
 // Key... constants are keys you can pass to TypeKey, PressKey and ReleaseKey.
 const (
 	KeyA                  = 'A'
