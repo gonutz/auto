@@ -1203,6 +1203,8 @@ func CaptureMonitors(monitors []Monitor) (image.Image, error) {
 	return CaptureScreenRect(r)
 }
 
+// ShowMessage opens a Windows message box displaying the given message and
+// waiting for the user to click the OK button.
 func ShowMessage(caption, message string) {
 	// Make sure the message uses Windows line breaks.
 	message = strings.ReplaceAll(message, "\r", "")
