@@ -375,6 +375,12 @@ func SetOnMouseEvent(f func(*MouseEvent)) {
 	loop.setMouseEvent(f)
 }
 
+// SetOnClipboardChange sets a callback that is called every time the content
+// of the clipboard changes.
+func SetOnClipboardChange(f func()) {
+	loop.setClipboardEvent(f)
+}
+
 // KeyboardEvent is given to the callback passed to SetOnKeyboardEvent. Every
 // time a keyboard event is triggered by either the user or programmatically
 // (e.g. by this library), a KeyboardEvent is sent. Key is the virtual key
@@ -441,32 +447,55 @@ const (
 	MouseWheelHorizontal                = w32.WM_MOUSEHWHEEL
 )
 
+type events struct {
+	keyboard  func(*KeyboardEvent)
+	mouse     func(*MouseEvent)
+	clipboard func()
+}
+
+func (e *events) allNil() bool {
+	return e.keyboard == nil && e.mouse == nil && e.clipboard == nil
+}
+
 type messageLoop struct {
-	mu            sync.Mutex
-	running       bool
-	keyboardEvent func(*KeyboardEvent)
-	mouseEvent    func(*MouseEvent)
-	newEvents     chan bool
+	mu             sync.Mutex
+	running        bool
+	keyboardEvent  func(*KeyboardEvent)
+	mouseEvent     func(*MouseEvent)
+	clipboardEvent func()
+	newEvents      chan events
 }
 
 func newMessageLoop() *messageLoop {
 	return &messageLoop{
-		newEvents: make(chan bool),
+		newEvents: make(chan events),
 	}
 }
 
 var loop = newMessageLoop()
 
 func (m *messageLoop) setKeyboardEvent(f func(*KeyboardEvent)) {
-	m.startLoop()
 	m.keyboardEvent = f
-	m.newEvents <- true
+	m.updateEvents()
 }
 
 func (m *messageLoop) setMouseEvent(f func(*MouseEvent)) {
-	m.startLoop()
 	m.mouseEvent = f
-	m.newEvents <- true
+	m.updateEvents()
+}
+
+func (m *messageLoop) setClipboardEvent(f func()) {
+	m.clipboardEvent = f
+	m.updateEvents()
+}
+
+func (m *messageLoop) updateEvents() {
+	m.startLoop()
+	m.newEvents <- events{
+		keyboard:  m.keyboardEvent,
+		mouse:     m.mouseEvent,
+		clipboard: m.clipboardEvent,
+	}
 }
 
 func (m *messageLoop) startLoop() {
@@ -479,19 +508,17 @@ func (m *messageLoop) startLoop() {
 }
 
 func (m *messageLoop) loop() {
-	defer func() {
-		m.mu.Lock()
-		m.running = false
-		m.mu.Unlock()
-	}()
-
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	var keyboardCallback func(*KeyboardEvent)
-	var mouseCallback func(*MouseEvent)
-
-	var keyboardHook, mouseHook w32.HHOOK
+	var (
+		keyboardCallback  func(*KeyboardEvent)
+		mouseCallback     func(*MouseEvent)
+		clipboardCallback func()
+		keyboardHook      w32.HHOOK
+		mouseHook         w32.HHOOK
+		clipboardWindow   w32.HWND
+	)
 
 	defer func() {
 		if keyboardHook != 0 {
@@ -499,6 +526,11 @@ func (m *messageLoop) loop() {
 		}
 		if mouseHook != 0 {
 			w32.UnhookWindowsHookEx(mouseHook)
+		}
+		if clipboardWindow != 0 {
+			w32.RemoveClipboardFormatListener(clipboardWindow)
+			w32.DestroyWindow(clipboardWindow)
+			clipboardWindow = 0
 		}
 	}()
 
@@ -592,16 +624,56 @@ func (m *messageLoop) loop() {
 		}
 	}
 
+	hookClipboard := func() {
+		wantHook := clipboardCallback != nil
+		haveHook := clipboardWindow != 0
+
+		if wantHook == haveHook {
+			return
+		}
+
+		if wantHook {
+			class := syscall.StringToUTF16Ptr("auto_clipboard_window")
+			w32.RegisterClassEx(&w32.WNDCLASSEX{
+				WndProc: syscall.NewCallback(func(window w32.HWND, msg uint32, w, l uintptr) uintptr {
+					switch msg {
+					case w32.WM_CLIPBOARDUPDATE:
+						if clipboardCallback != nil {
+							clipboardCallback()
+						}
+						return 0
+					default:
+						return w32.DefWindowProc(window, msg, w, l)
+					}
+				}),
+				ClassName: class,
+			})
+			clipboardWindow = w32.CreateWindowEx(
+				0, class, nil, 0, 0, 0, 0, 0, w32.HWND_MESSAGE, 0, 0, nil,
+			)
+			w32.AddClipboardFormatListener(clipboardWindow)
+		} else {
+			w32.RemoveClipboardFormatListener(clipboardWindow)
+			w32.DestroyWindow(clipboardWindow)
+			clipboardWindow = 0
+		}
+	}
+
 	for {
 		select {
-		case <-m.newEvents:
-			if m.keyboardEvent == nil && m.mouseEvent == nil {
-				return
+		case events := <-m.newEvents:
+			for events.allNil() {
+				// Wait until we have at least one event callback.
+				events = <-m.newEvents
 			}
-			keyboardCallback = m.keyboardEvent
-			mouseCallback = m.mouseEvent
+
+			keyboardCallback = events.keyboard
+			mouseCallback = events.mouse
+			clipboardCallback = events.clipboard
+
 			hookMouse()
 			hookKeyboard()
+			hookClipboard()
 		default:
 			var msg w32.MSG
 			if w32.PeekMessage(&msg, 0, 0, 0, w32.PM_REMOVE) {
